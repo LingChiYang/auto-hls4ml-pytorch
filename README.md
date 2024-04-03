@@ -3,5 +3,6 @@ A hls4ml repo supporting pytorch transformer and automatically optimizing perfor
 
 
 ```bash
+git clone --recurse-submodules <repository-url>
 git submodule update --init --recursive
 ```
