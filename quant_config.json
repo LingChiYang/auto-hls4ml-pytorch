@@ -1,0 +1,177 @@
+{
+    "self_attn": {
+        "in_proj": {
+            "input": {
+                "bitwidth": 18,
+                "int_bitwidth": 8,
+                "quantize": false
+            },
+            "weight": {
+                "bitwidth": 18,
+                "int_bitwidth": 8
+            },
+            "bias": {
+                "bitwidth": 18,
+                "int_bitwidth": 8
+            },
+            "output": {
+                "bitwidth": 18,
+                "int_bitwidth": 8
+            }
+        },
+        "row_sum": {
+            "bitwidth": 18,
+            "int_bitwidth": 8,
+            "signed": false
+        },
+        "scale": {
+            "bitwidth": 18,
+            "int_bitwidth": 0
+        },
+        "exp_input": {
+            "bitwidth": 12,
+            "int_bitwidth": 4
+        },
+        "exp_output": {
+            "bitwidth": 18,
+            "int_bitwidth": 8,
+            "signed": false
+        },
+        "inv_input": {
+            "bitwidth": 12,
+            "int_bitwidth": 8,
+            "signed": false
+        },
+        "inv_output": {
+            "bitwidth": 18,
+            "int_bitwidth": 0,
+            "signed": false
+        },
+        "out_proj": {
+            "input": {
+                "bitwidth": 18,
+                "int_bitwidth": 8
+            },
+            "weight": {
+                "bitwidth": 18,
+                "int_bitwidth": 8
+            },
+            "bias": {
+                "bitwidth": 18,
+                "int_bitwidth": 8
+            },
+            "output": {
+                "bitwidth": 18,
+                "int_bitwidth": 8
+            }
+        }
+    },
+    "ffn": {
+        "in_proj": {
+            "input": {
+                "bitwidth": 18,
+                "int_bitwidth": 8,
+                "quantize": false
+            },
+            "weight": {
+                "bitwidth": 18,
+                "int_bitwidth": 8
+            },
+            "bias": {
+                "bitwidth": 18,
+                "int_bitwidth": 8
+            },
+            "output": {
+                "bitwidth": 18,
+                "int_bitwidth": 8,
+                "quantize": false
+            }
+        },
+        "out_proj": {
+            "input": {
+                "bitwidth": 18,
+                "int_bitwidth": 8
+            },
+            "weight": {
+                "bitwidth": 18,
+                "int_bitwidth": 8
+            },
+            "bias": {
+                "bitwidth": 18,
+                "int_bitwidth": 8
+            },
+            "output": {
+                "bitwidth": 18,
+                "int_bitwidth": 8
+            }
+        }
+    },
+    "norm1": {
+        "input": {
+            "bitwidth": 18,
+            "int_bitwidth": 8
+        },
+        "mean": {
+            "bitwidth": 18,
+            "int_bitwidth": 8
+        },
+        "scale": {
+            "bitwidth": 18,
+            "int_bitwidth": 8
+        },
+        "bias": {
+            "bitwidth": 18,
+            "int_bitwidth": 8
+        },
+        "var_input": {
+            "bitwidth": 12,
+            "int_bitwidth": 3,
+            "signed": false
+        },
+        "var_output": {
+            "bitwidth": 18,
+            "int_bitwidth": 8,
+            "signed": false
+        },
+        "output": {
+            "bitwidth": 18,
+            "int_bitwidth": 8
+        }
+    },
+    "norm2": {
+        "input": {
+            "bitwidth": 18,
+            "int_bitwidth": 8
+        },
+        "mean": {
+            "bitwidth": 18,
+            "int_bitwidth": 8
+        },
+        "scale": {
+            "bitwidth": 18,
+            "int_bitwidth": 8
+        },
+        "bias": {
+            "bitwidth": 18,
+            "int_bitwidth": 8
+        },
+        "var_input": {
+            "bitwidth": 12,
+            "int_bitwidth": 3,
+            "signed": false
+        },
+        "var_output": {
+            "bitwidth": 18,
+            "int_bitwidth": 8,
+            "signed": false
+        },
+        "output": {
+            "bitwidth": 18,
+            "int_bitwidth": 8
+        }
+    },
+    "input": {
+        "bitwidth": 18,
+        "int_bitwidth": 8
+    }
+}

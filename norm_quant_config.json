@@ -1,0 +1,32 @@
+{
+    "input": {
+        "bitwidth": 18,
+        "int_bitwidth": 8
+    },
+    "mean": {
+        "bitwidth": 18,
+        "int_bitwidth": 8
+    },
+    "scale": {
+        "bitwidth": 18,
+        "int_bitwidth": 8
+    },
+    "bias": {
+        "bitwidth": 18,
+        "int_bitwidth": 8
+    },
+    "output": {
+        "bitwidth": 18,
+        "int_bitwidth": 8
+    },
+    "var_input": {
+        "bitwidth": 12,
+        "int_bitwidth": 3,
+        "signed": false
+    },
+    "var_output": {
+        "bitwidth": 18,
+        "int_bitwidth": 8,
+        "signed": false
+    }
+}
