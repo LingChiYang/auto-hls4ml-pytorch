@@ -27,7 +27,7 @@
 
   images_tensor = torch.cat(image_tensors, dim=0)
   true_labels = torch.tensor(true_labels)
-
+  ```
 ## 建立`model4hls`使得HLS4ML可以識別，並轉移DeiT-T `model`權重至`model4hls`
   ```python
     from torch import nn
