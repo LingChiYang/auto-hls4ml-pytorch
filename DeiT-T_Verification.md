@@ -98,7 +98,7 @@ model4hls.transformer_encoder.norm.weight.data = model.deit.layernorm.weight
 model4hls.transformer_encoder.norm.bias.data = model.deit.layernorm.bias
 ```
 ## 生成`transformer_quant_config`量化transformer encoder，並calibrate quantized model觀察quantizer的數值範圍並重新生成calibated `transformer_quant_config`
-# Tips : 由於calibration可能會很久(取決於使用多大的calibation dataset)，建議將calibrated `transformer_quant_config`存檔
+#### Tips : 由於calibration可能會很久(取決於使用多大的calibation dataset)，建議將calibrated `transformer_quant_config`存檔
   ```python
   from quantizers import *
   from synchronizer import *
