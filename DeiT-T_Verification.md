@@ -139,4 +139,14 @@ model4hls.transformer_encoder.norm.bias.data = model.deit.layernorm.bias
       embbed_out = model.deit.embeddings(images_tensor)
       transformer_quant_config = calibrate_transformer(qmodel, transformer_quant_config, embbed_out[0:1,:,:].permute(1, 0, 2).type(torch.float64).to(torch.device('cpu')))
   ```
-
+## 生成`state` for Simulated Annealing(若沒有要透過Simulated Annealing優化，這邊只是作為同步`quant_config`和`hls_config`的方法)並測試sync_quant_config
+#### - `state`包含影響BRAM數目的變數`BRAMstate`以及不影響BRAM數目的變數`DSPstate`(或者說影響DSP數目的變數，但目前並沒有 ***TODO : 將DSP相關變數加入Design Search Space***)
+     - `num_layers`為Transformer Block的數量。
+  ```python
+  BRAMstate = gen_init_BRAMaware_state(num_layers=12, 
+                                     weight_bits=32, 
+                                     table_input_bits=32, 
+                                     table_output_bits=32, 
+                                     intermediate_bits=32, 
+                                     result_bits=32)
+  DSPstate = gen_init_nonBRAMaware_state(num_layers=12)
