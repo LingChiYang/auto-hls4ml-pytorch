@@ -1,4 +1,4 @@
-** 下載官方Distilled DeiT-T並處理數據
+## 下載官方Distilled DeiT-T並處理數據
   ```
   from transformers import AutoFeatureExtractor, DeiTForImageClassificationWithTeacher
   from PIL import Image
