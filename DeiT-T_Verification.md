@@ -1,5 +1,5 @@
 ## 下載官方Distilled DeiT-T並處理數據
-  ```
+  ```python
   from transformers import AutoFeatureExtractor, DeiTForImageClassificationWithTeacher
   from PIL import Image
   import requests
