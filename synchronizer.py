@@ -1,32 +1,37 @@
 from typing import Dict
 
-def gen_init_BRAMaware_state(num_layers:int) -> Dict[str, int]:
+def gen_init_BRAMaware_state(num_layers:int, 
+                             weight_bits:int=18,
+                             table_input_bits:int=10,
+                             table_output_bits:int=18,
+                             intermediate_bits:int=18,
+                             result_bits:int=18) -> Dict[str, int]:
     state = {}
     for i in range(num_layers):
-        state.update({'layers_'+str(i)+'_norm1.Precision.var_table': 18,
-                      'layers_'+str(i)+'_norm1.VarTableSize': 10,
-                      'layers_'+str(i)+'_norm1.Precision.result': 18,
-                      'layers_'+str(i)+'_self_attn.Precision.exp_table': 18,
-                      'layers_'+str(i)+'_self_attn.ExpTableSize': 10,
-                      'layers_'+str(i)+'_self_attn.Precision.inv_table': 18,
-                      'layers_'+str(i)+'_self_attn.InvTableSize': 10,
-                      'layers_'+str(i)+'_self_attn.Precision.in_proj_out': 18,
-                      'layers_'+str(i)+'_self_attn.Precision.out_proj_in': 18,
-                      'layers_'+str(i)+'_self_attn.Precision.in_proj_weight': 18,
-                      'layers_'+str(i)+'_self_attn.Precision.out_proj_weight': 18,
-                      'layers_'+str(i)+'_self_attn.Precision.result': 18,
-                      'layers_'+str(i)+'_add1.Precision.result': 18,
-                      'layers_'+str(i)+'_norm2.Precision.var_table': 18,
-                      'layers_'+str(i)+'_norm2.VarTableSize': 10,
-                      'layers_'+str(i)+'_norm2.Precision.result': 18,
-                      'layers_'+str(i)+'_ffn.Precision.in_proj_weight': 18,
-                      'layers_'+str(i)+'_ffn.Precision.out_proj_weight': 18,
-                      'layers_'+str(i)+'_ffn.Precision.hidden': 18,
-                      'layers_'+str(i)+'_ffn.Precision.result': 18,
-                      'layers_'+str(i)+'_add2.Precision.result': 18})
-    state.update({'norm.Precision.var_table': 18,
-                  'norm.VarTableSize': 10,
-                  'norm.Precision.result': 18})
+        state.update({'layers_'+str(i)+'_norm1.Precision.var_table': table_output_bits,
+                      'layers_'+str(i)+'_norm1.VarTableSize': table_input_bits,
+                      'layers_'+str(i)+'_norm1.Precision.result': result_bits,
+                      'layers_'+str(i)+'_self_attn.Precision.exp_table': table_output_bits,
+                      'layers_'+str(i)+'_self_attn.ExpTableSize': table_input_bits,
+                      'layers_'+str(i)+'_self_attn.Precision.inv_table': table_output_bits,
+                      'layers_'+str(i)+'_self_attn.InvTableSize': table_input_bits,
+                      'layers_'+str(i)+'_self_attn.Precision.in_proj_out': intermediate_bits,
+                      'layers_'+str(i)+'_self_attn.Precision.out_proj_in': intermediate_bits,
+                      'layers_'+str(i)+'_self_attn.Precision.in_proj_weight': weight_bits,
+                      'layers_'+str(i)+'_self_attn.Precision.out_proj_weight': weight_bits,
+                      'layers_'+str(i)+'_self_attn.Precision.result': result_bits,
+                      'layers_'+str(i)+'_add1.Precision.result': result_bits,
+                      'layers_'+str(i)+'_norm2.Precision.var_table': table_output_bits,
+                      'layers_'+str(i)+'_norm2.VarTableSize': table_input_bits,
+                      'layers_'+str(i)+'_norm2.Precision.result': result_bits,
+                      'layers_'+str(i)+'_ffn.Precision.in_proj_weight': weight_bits,
+                      'layers_'+str(i)+'_ffn.Precision.out_proj_weight': weight_bits,
+                      'layers_'+str(i)+'_ffn.Precision.hidden': intermediate_bits,
+                      'layers_'+str(i)+'_ffn.Precision.result': result_bits,
+                      'layers_'+str(i)+'_add2.Precision.result': result_bits})
+    state.update({'norm.Precision.var_table': table_output_bits,
+                  'norm.VarTableSize': table_input_bits,
+                  'norm.Precision.result': result_bits})
     return state
 
 def gen_init_nonBRAMaware_state(num_layers:int) -> Dict[str, int]:
@@ -67,7 +72,7 @@ def sync_hls_config(hls_config:dict,
 
 def sync_quant_config(quant_config:dict, 
                       hls_config:dict,
-                      state:dict) -> dict:
+                      state:dict) -> bool:
     valid = True
     for key in state.keys():
 

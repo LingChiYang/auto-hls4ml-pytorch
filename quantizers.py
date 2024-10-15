@@ -142,7 +142,7 @@ class QFlashMultiheadAttention(torch.nn.MultiheadAttention):
                  token_tile_size:int=1,
                  embed_tile_size:int=1,
                  head_tile_size:int=1,
-                 max_neg_value:float=-8.0,
+                 max_neg_value:float=-80.0,
                  calibration=False):
         super(QFlashMultiheadAttention, self).__init__(embed_dim, 
                                                   num_heads,  
@@ -187,40 +187,32 @@ class QFlashMultiheadAttention(torch.nn.MultiheadAttention):
         
     def forward(self, query, attn_mask=None):
         q, k, v = self.in_proj(query).chunk(3, dim=-1)
-        #save query and q k v to txt file
-        #print("query", query)
         query = self.in_proj.input_qtzr(query)
-        #print("query after", query)
-        #with open("query.txt", 'a') as f:
-        #    np.savetxt(f, query.reshape(-1, self.embed_dim).detach().numpy(), fmt='%.8f')
-        #with open("q.txt", 'a') as f:
-        #    np.savetxt(f, q.reshape(-1, self.embed_dim).detach().numpy(), fmt='%.8f')
-        #with open("k.txt", 'a') as f:
-        #    np.savetxt(f, k.reshape(-1, self.embed_dim).detach().numpy(), fmt='%.8f')
-        #with open("v.txt", 'a') as f:
-        #    np.savetxt(f, v.reshape(-1, self.embed_dim).detach().numpy(), fmt='%.8f')
         tgt_len, bsz, embed_dim = query.shape
         head_dim = embed_dim // self.num_heads
         q = q.contiguous().view(tgt_len, bsz * self.num_heads, head_dim).transpose(0, 1)
         k = k.contiguous().view(tgt_len, bsz * self.num_heads, head_dim).transpose(0, 1)
         v = v.contiguous().view(tgt_len, bsz * self.num_heads, head_dim).transpose(0, 1)
         
+        # with open("Q.txt", 'a') as f:
+        #     np.savetxt(f, q.detach().cpu().numpy().reshape(-1,1), fmt='%.6f')
+        # with open("K.txt", 'a') as f:
+        #     np.savetxt(f, k.detach().cpu().numpy().reshape(-1,1), fmt='%.6f')
+        # with open("V.txt", 'a') as f:
+        #     np.savetxt(f, v.detach().cpu().numpy().reshape(-1,1), fmt='%.6f')
         o = torch.zeros_like(q)
         all_row_sums = torch.zeros((bsz * self.num_heads, tgt_len, 1), dtype = self.dtype, device = self.device)
         all_row_maxes = torch.full((bsz * self.num_heads, tgt_len, 1), self.max_neg_value, dtype = self.dtype, device = self.device)
 
         num_tiles = math.ceil(tgt_len / self.token_tile_size)
         if attn_mask is not None and attn_mask.ndim == 2:
-            #attn_mask = rearrange(attn_mask, 'b n -> 1 1 b n')
             mask = attn_mask.bool()
-            #print("attn_mask shape:", attn_mask.shape)
 
         if attn_mask is None:
             col_masks = (None,) * num_tiles
             mask = (col_masks,) * num_tiles 
         else:
             mask = ((mask,) * num_tiles) if mask.shape[-2] == 1 else mask.split(self.token_tile_size, dim = -2)
-            #print("attn_mask shape1:", attn_mask.shape)
             mask = tuple(((row_mask,) * num_tiles) if row_mask.shape[-1] == 1 else row_mask.split(self.token_tile_size, dim = -1) for row_mask in mask)
 
         B, Nt, E = q.shape
@@ -232,16 +224,6 @@ class QFlashMultiheadAttention(torch.nn.MultiheadAttention):
             all_row_sums.split(self.token_tile_size, dim = -2),
             all_row_maxes.split(self.token_tile_size, dim = -2),
         )
-        #attn_weight_debug = torch.zeros((self.num_heads, tgt_len, tgt_len), dtype = self.dtype, device = self.device)
-        exp_weight_debug = torch.zeros((self.num_heads*bsz, tgt_len, tgt_len), dtype = self.dtype, device = self.device)
-        #row_max_debug = torch.zeros((self.num_heads, tgt_len, tgt_len), dtype = self.dtype, device = self.device)
-        row_sum_debug = torch.zeros((self.num_heads*bsz, tgt_len, 1), dtype = self.dtype, device = self.device)
-        #with open("K.txt", 'a') as f:
-        #    np.savetxt(f, k.reshape(-1, tgt_len*head_dim).detach().numpy(), fmt='%.6f')
-        #with open("Q.txt", 'a') as f:
-        #    np.savetxt(f, q.reshape(-1, tgt_len*head_dim).detach().numpy(), fmt='%.6f')
-        #with open("V.txt", 'a') as f:
-        #    np.savetxt(f, v.reshape(-1, tgt_len*head_dim).detach().numpy(), fmt='%.6f')
         for i, (qc, oc, row_mask, row_sums, row_maxes) in enumerate(row_splits):
             col_splits = zip(
                 k.split(self.token_tile_size, dim = -2),
@@ -251,59 +233,67 @@ class QFlashMultiheadAttention(torch.nn.MultiheadAttention):
             for j, (kc, vc, col_mask) in enumerate(col_splits):
                 attn_weights = torch.einsum('... i d, ... j d -> ... i j', qc, kc) * scale
                 if col_mask is not None:
-                #    #print("col_mask:", ~col_mask)
                     attn_weights.masked_fill_(col_mask, -1000000)
                 block_row_maxes = attn_weights.amax(dim = -1, keepdims = True)
                 new_row_maxes = torch.maximum(row_maxes, block_row_maxes)
-                #row_max_debug[:, i*self.token_tile_size:(i+1)*self.token_tile_size, j*self.token_tile_size:(j+1)*self.token_tile_size] = new_row_maxes
+                
+                # 将attn_weights的值存储到文件
+                # with open("attn_weights.txt", 'a') as f:
+                #     np.savetxt(f, attn_weights.detach().cpu().numpy().reshape(-1,1), fmt='%.6f')
+                
+                # 将new_row_maxes的值存储到文件
+                # with open("new_row_maxes.txt", 'a') as f:
+                #     np.savetxt(f, new_row_maxes.detach().cpu().numpy().reshape(-1,1), fmt='%.6f')
+                
                 att_weights = attn_weights - new_row_maxes
-                #attn_weight_debug[:, i*self.token_tile_size:(i+1)*self.token_tile_size, j*self.token_tile_size:(j+1)*self.token_tile_size] = attn_weights
-                att_weights = self.exp_input_qtzr(att_weights)
-                exp_weights = torch.exp(att_weights)
+                quant_att_weights = self.exp_input_qtzr(att_weights)
+                exp_weights = torch.exp(quant_att_weights)
                 exp_weights = self.exp_output_qtzr(exp_weights)
+                
+                # 将exp_weights的值存储到文件
+                # with open("exp_weights.txt", 'a') as f:
+                #     np.savetxt(f, exp_weights.detach().cpu().numpy().reshape(-1,1), fmt='%.6f')
+                
                 if col_mask is not None:
                     exp_weights.masked_fill_(col_mask, 0.0)
-                exp_weight_debug[:, i*self.token_tile_size:(i+1)*self.token_tile_size, j*self.token_tile_size:(j+1)*self.token_tile_size] = exp_weights
                 block_row_sums = exp_weights.sum(dim = -1, keepdims = True).clamp(min = 1e-10)
                 exp_values = torch.einsum('... i j, ... j d -> ... i d', exp_weights, vc)
                 exp_row_max_diff = self.exp_input_qtzr(row_maxes - new_row_maxes)
                 exp_row_max_diff = self.exp_output_qtzr(torch.exp(exp_row_max_diff))
+                
+                # 将exp_row_max_diff的值存储到文件
+                # with open("exp_row_max_diff.txt", 'a') as f:
+                #     np.savetxt(f, exp_row_max_diff.detach().cpu().numpy().reshape(-1,1), fmt='%.6f')
+                
                 new_row_sums = self.row_sum_qtzr(exp_row_max_diff * row_sums + block_row_sums)
-                #exp_weight_debug[:, i*self.token_tile_size:(i+1)*self.token_tile_size, j*self.token_tile_size:(j+1)*self.token_tile_size] = exp_row_max_diff
-                #row_sum_debug[:, i*self.token_tile_size:(i+1)*self.token_tile_size, j*self.token_tile_size:(j+1)*self.token_tile_size] = new_row_sums
                 oc.mul_(exp_row_max_diff)
                 oc.add_(exp_values)
-                #if i == 0:
-                #    print(f"exp weights: {exp_weights[0,0,0].item()}, vc {vc[0,0,0].item()}")
-                #    print(f"oc {oc[0,0,0].item()}, exp_values {exp_values[0,0,0].item()}, exp_row_max_diff {exp_row_max_diff[0,0,0].item()}")
-                #exp_weight_debug[:, i*self.token_tile_size:(i+1)*self.token_tile_size, j*self.token_tile_size:(j+1)*self.token_tile_size] = exp_values
-                #print("max oc:", oc.abs().max())
                 self.out_proj.input_qtzr.forward_inplace(oc)
-                #print(f"max oc after:{oc.abs().max()}, max bits:{self.attn_out_qtzr.max_int_bits}")
                 
                 row_maxes.copy_(new_row_maxes)
                 row_sums.copy_(new_row_sums)
+                
+                # 每次更新new_row_sums时将其存储到文件
+                # with open("new_row_sums.txt", 'a') as f:
+                #     np.savetxt(f, new_row_sums.detach().cpu().numpy().reshape(-1,1), fmt='%.6f')
+            
             new_row_sums = self.inv_input_qtzr(new_row_sums)
             row_sum_inv = self.inv_output_qtzr(torch.reciprocal(new_row_sums + 1e-10))
-            row_sum_debug[:, i*self.token_tile_size:(i+1)*self.token_tile_size, :] = row_sum_inv
-            #row_sum_inv = row_sum_inv.view(bsz*self.num_heads, tgt_len, 1)
+            
+            # 存储未乘上inv_row_sum的O
+            # with open("O.txt", 'a') as f:
+            #     np.savetxt(f, oc.detach().cpu().numpy().reshape(-1,1), fmt='%.6f')
+            
             oc.mul_(row_sum_inv)
             self.out_proj.input_qtzr.forward_inplace(oc)
-        #with open("O.txt", 'a') as f:
-        #    np.savetxt(f, o.reshape(-1, tgt_len*head_dim).detach().numpy(), fmt='%.6f')
+            
+            # 将row_sum_inv的值存储到文件
+            # with open("row_sum_inv.txt", 'a') as f:
+            #     np.savetxt(f, row_sum_inv.detach().cpu().numpy().reshape(-1,1), fmt='%.6f')
         attn_output = o.transpose(0, 1).contiguous().view(tgt_len, bsz, embed_dim)
-        #print("attn_output", attn_output)
         attn_output = self.out_proj(attn_output)
-        #print("exp_weight_debug", exp_weight_debug)
-        #print("row_sum_debug", row_sum_debug)
-        #with open("attn_weights.txt", 'a') as f:
-        #    np.savetxt(f, attn_weight_debug.reshape(-1, tgt_len*tgt_len).detach().numpy(), fmt='%.6f')
-        #with open("exp_weights.txt", 'a') as f:
-        #    np.savetxt(f, exp_weight_debug.reshape(-1, tgt_len*tgt_len).detach().numpy(), fmt='%.6f')
-        #with open("row_max.txt", 'a') as f:
-        #    np.savetxt(f, row_max_debug.reshape(-1, tgt_len*tgt_len).detach().numpy(), fmt='%.6f')
-        #with open("row_sum.txt", 'a') as f:
-        #    np.savetxt(f, row_sum_debug.reshape(-1, tgt_len*tgt_len).detach().numpy(), fmt='%.6f')
+        # with open("attn_output.txt", 'a') as f:
+        #     np.savetxt(f, attn_output.detach().cpu().numpy().reshape(-1,1), fmt='%.6f')
         return attn_output
         
 
@@ -329,60 +319,39 @@ class QLayerNorm(torch.nn.LayerNorm):
         self.inv_embed_dim = self.dim_qtzr(self.inv_embed_dim)
     def forward(self, x):
         x = self.input_qtzr(x)
-        #save x to file
-        #with open("norm_in.txt", 'a') as f:
-        #    np.savetxt(f, x[:,0,:].detach().numpy(), fmt='%.6f')
-        #xsum = 0
-        #for i in range(self.normalized_shape[-1]):
-        #    #accumulate the 132th row
-        #    xsum += x[132,0,i]
-        #    print(f"xsum[{i}] = {xsum}")
-        xmean = x.sum(dim=-1, keepdim=True)
-        #print("x_sum: ",xmean[132,0,0].item())
-        #with open("xsum.txt", 'a') as f:
-        #    np.savetxt(f, xmean[:,0,:].detach().numpy(), fmt='%.6f')
-        xmean.mul_(self.inv_embed_dim)
+        # with open("layernorm_data.txt", 'a') as f:
+        #     np.savetxt(f, x.detach().cpu().numpy().reshape(-1,1), fmt='%.6f')
+        xsum = x.sum(dim=-1)
+        xmean = xsum * self.inv_embed_dim
         xmean = self.mean_qtzr(xmean)
-        #import numpy as np
-        #with open("xmean.txt", 'a') as f:
-        #    np.savetxt(f, xmean[:,0,:].detach().numpy(), fmt='%.6f')
         xsqr = x**2
-        xsqrsum = xsqr.sum(dim=-1, keepdim=True)
-        xsqrsum.mul_(self.inv_embed_dim)
-    
-        #with open("xvar.txt", 'a') as f:
-        #    np.savetxt(f, xsqrsum[:,0,:].detach().numpy(), fmt='%.6f')
+        xsqrsum = xsqr.sum(dim=-1)
+        xsqrsum = xsqrsum * self.inv_embed_dim
         xvar = xsqrsum - xmean**2
-        #print('xvar', xvar)
-        #with open("xvar_in.txt", 'a') as f:
-        #    np.savetxt(f, xvar[:,0,:].detach().numpy(), fmt='%.6f')
         xvar = self.var_input_qtzr(xvar)
         xvar = torch.sqrt(xvar+1e-15)
         xvar = torch.reciprocal(xvar)
         xvar = self.var_output_qtzr(xvar)
-        #print('xvar', xvar)
-        #with open("xvar_out.txt", 'a') as f:
-        #    np.savetxt(f, xvar[:,0,:].detach().numpy(), fmt='%.10f')
-        #with open("xmean.txt", 'a') as f:
-        #    np.savetxt(f, xmean[:,0,:].detach().numpy(), fmt='%.10f')
-        xnorm = (x - xmean) * xvar
-        #print('xnorm', xnorm)
-        x_debug = x - xmean
-        #with open("x_debug.txt", 'a') as f: #only save the 133 row
-        #    np.savetxt(f, x_debug[132,0,:].detach().numpy(), fmt='%.10f')
-        #with open("xnorm_133_before.txt", 'a') as f: #only save the 133 row
-        #    np.savetxt(f, xnorm[132,0,:].detach().numpy(), fmt='%.10f')
+        xnorm = (x - xmean.unsqueeze(-1)) * xvar.unsqueeze(-1)
         weight = self.scale_qtzr(self.weight)
         xnorm.mul_(weight)
-        #with open("xnorm_133.txt", 'a') as f: #only save the 133 row
-        #    np.savetxt(f, xnorm[132,0,:].detach().numpy(), fmt='%.6f')
-
         bias = self.bias_qtzr(self.bias)
         xnorm.add_(bias)
         xnorm = self.output_qtzr(xnorm)
-        #with open("norm_out.txt", 'a') as f:
-        #    np.savetxt(f, xnorm[:,0,:].detach().numpy(), fmt='%.6f')
-        #print("xnorm", xnorm)
+        
+        # 儲存xsum、xsqrsum、xmean和xvar至相應的txt文件
+        # with open("sum.txt", 'a') as f:
+        #     np.savetxt(f, xsum.detach().cpu().numpy(), fmt='%.6f')
+        # with open("sqrsum.txt", 'a') as f:
+        #     np.savetxt(f, xsqrsum.detach().cpu().numpy(), fmt='%.6f')
+        # with open("mean.txt", 'a') as f:
+        #     np.savetxt(f, xmean.detach().cpu().numpy(), fmt='%.6f')
+        # with open("var.txt", 'a') as f:
+        #     np.savetxt(f, xvar.detach().cpu().numpy(), fmt='%.6f')
+        
+        # 儲存xnorm至layernorm.txt
+        # with open("layernorm.txt", 'a') as f:
+        #     np.savetxt(f, xnorm.detach().cpu().numpy().reshape(-1,1), fmt='%.6f')
         return xnorm
     
 class QFeedForward(nn.Module):
@@ -390,6 +359,7 @@ class QFeedForward(nn.Module):
                  embed_dim: int, 
                  hidden_dim: int,
                  bias: bool = True, 
+                 activation: str = 'relu',
                  device: str = 'cpu', 
                  dtype: torch.dtype = torch.float64,
                  quant_config: dict = None,
@@ -401,7 +371,10 @@ class QFeedForward(nn.Module):
                                device=device, 
                                dtype=dtype,
                                quant_config=quant_config['in_proj'], calibration=calibration)
-        self.activation = nn.ReLU()
+        self.activation = activation
+        self.cdf_input_qtzr = TorchQuantizer(bitwidth=12, int_bitwidth=3, rounding='TRUNCATE', saturation='SAT', calibration=calibration)
+        self.cdf_output_qtzr = TorchQuantizer(bitwidth=18, int_bitwidth=0, signed=False, saturation='SAT', calibration=calibration)
+
         self.out_proj = QLinear(hidden_dim, 
                                 embed_dim, 
                                 bias=bias, 
@@ -410,20 +383,17 @@ class QFeedForward(nn.Module):
                                 quant_config=quant_config['out_proj'], calibration=calibration)
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        #print('ffn x', x)
-        #with open("./hls/ndt_calibrate3/tb_data/tb_input_features.dat", 'a') as f:
-        #    np.savetxt(f, self.in_proj.input_qtzr(x[:,0,:]).reshape(1,-1).detach().numpy(), fmt='%.6f')
         x = self.in_proj(x)
-        #save x to file
-        #with open("ffn_hidden.txt", 'a') as f:
-        #    np.savetxt(f, x[:,0,:].flatten().detach().numpy(), fmt='%.6f')
-        #print('hidden x', x)
-        x = self.activation(x)
-        #print("relu x", x)
+        # with open("linear.txt", 'a') as f:
+        #     np.savetxt(f, x.detach().cpu().numpy().reshape(-1,1), fmt='%.6f')
+        if self.activation == 'relu':
+            x = nn.ReLU()(x)
+        elif self.activation == 'gelu':
+            cdf_input = self.cdf_input_qtzr(x)
+            cdf_values = 0.5 * (1 + torch.erf(cdf_input / math.sqrt(2)))
+            cdf_values = self.cdf_output_qtzr(cdf_values)
+            x = x * cdf_values
         x = self.out_proj(x)
-        #print('ffn out', x)
-        #with open("./hls/ndt_calibrate3/tb_data/tb_output_predictions.dat", 'a') as f:
-        #    np.savetxt(f, x[:,0,:].reshape(1,-1).detach().numpy(), fmt='%.6f')
         return x
     
 class QTransformerEncoderLayer(nn.TransformerEncoderLayer):
@@ -452,6 +422,7 @@ class QTransformerEncoderLayer(nn.TransformerEncoderLayer):
                                                     quant_config=quant_config['self_attn'], calibration=calibration)
         self.feedforward = QFeedForward(embed_dim,
                                     hidden_dim,
+                                    activation=activation,
                                     device=device,
                                     dtype=dtype,
                                     quant_config=quant_config['ffn'], calibration=calibration)
@@ -468,29 +439,14 @@ class QTransformerEncoderLayer(nn.TransformerEncoderLayer):
                 src: torch.Tensor, 
                 src_mask: torch.Tensor = None) -> torch.Tensor:
         if self.norm_first:
-            #print("src:", src)
-            #with open("src_norm1_in.txt", 'a') as f:
-            #    np.savetxt(f, src[:,0,:].detach().numpy(), fmt='%.6f')
             src = self.norm1.input_qtzr(src) #add input quantizer
-            #print('src', src)
             src_norm = self.norm1(src)
-            #print('src_norm', src_norm)
-            #import numpy as np
-            #with open("src_norm1.txt", 'a') as f:
-            #    np.savetxt(f, src_norm[:,0,:].detach().numpy(), fmt='%.6f')
             src2 = self.self_attn(src_norm, attn_mask=src_mask)
-            #print('src2', src2)
             src = src + self.dropout(src2)
-            #print("src:", src)
             src = self.norm2.input_qtzr(src) #add input quantizer
-            #print('src2', src)
             src_norm = self.norm2(src)
-            #print('src_norm', src_norm)
             src2 = self.feedforward(src_norm)
-            #print("src before add:", src)
-            #print("src2", src2)
             src = src + self.dropout(src2)
-            #print("src after add:", src[0,0,:])
         else:
             src2 = self.self_attn(src, attn_mask=src_mask)
             src = src + self.dropout(src2)
@@ -546,7 +502,7 @@ class QTransformerEncoder(nn.TransformerEncoder):
 def calibrate_transformer(qmodel: QTransformerEncoder, 
                           quant_config: dict, 
                           calibration_data: torch.Tensor,
-                          calibration_mask: torch.Tensor
+                          calibration_mask: torch.Tensor = None
                           ) -> dict:
     with torch.no_grad():
         qmodel.eval()
