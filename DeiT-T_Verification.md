@@ -170,6 +170,23 @@ model4hls.transformer_encoder.norm.bias.data = model.deit.layernorm.bias
   ```
 ## 建立quantize model `qmodel` 並載入calibared和sync up後的 `transformer_quant_config`。配置HLS config中的Tile size以最大化BRAM以及硬體使用效率並產生 `hls_model` 和HLS project
   ```python
+  qmodel = QTransformerEncoder([QTransformerEncoderLayer(192, 
+                                                         3, 
+                                                         768, 
+                                                         activation='gelu', 
+                                                         quant_config=transformer_quant_config[i], 
+                                                         calibration=False, 
+                                                         device='cpu') for i in range(12)], 
+                               12, 
+                               QLayerNorm(192, 
+                                          quant_config=transformer_quant_config['norm'], 
+                                          calibration=False, 
+                                          device='cpu'),
+                               TorchQuantizer(bitwidth=18, int_bitwidth=5, signed=True, calibration=False),
+                               dtype=torch.float64)
+  qmodel.transfer_weights(model4hls)
+  qmodel.to(torch.device('cpu'))
+  qmodel.eval()
   for layer_config in config['LayerName'].keys():
       if layer_config.endswith('self_attn'):
           config['LayerName'][layer_config]['TilingFactor'] = [1,1,1]
